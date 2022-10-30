@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package fib;
+
+import "google/api/annotations.proto";
+
+message FibRequest {
+    uint32 n = 1; 
+}
+
+message FibResponse {
+    uint32 fib = 1;
+    uint32 timestamp = 2;
+    uint32 count = 3;
+}
+
+service FibService {
+    rpc ComputeFib (FibRequest) returns (FibResponse) {
+        option (google.api.http) = {
+            get: "/fib"
+        };
+    }
+}
