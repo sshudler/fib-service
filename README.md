@@ -2,6 +2,7 @@
 
 A simple web service with a C++ backend to compute Fibonacci numbers. The client sends the requested index `n` and the server responds with the `n`'s Fibonacci number, a timestamp (i.e., number of seconds since 00:00 UTC, Jan 1, 1970), and a count of how many times `n` was already requested. For example, requesting `n = 20` will result in `{"fib":6765,"timestamp":1667133128,"count":1}` (JSON format).
 
+Note that the index `n` is assumed to be in the range [0, 93], so that the resulting Fibonacci number fits into uint64. Otherwise the gRPC server returns an error status. In such case, Envoy will not produce any response.
 
 The server uses the gRPC framework. It is based on Google's Protocol Buffers serialization infrastructure and communicates in the binary HTTP/2 format. To make it a web service we need HTTP/2 <--> HTTP/1.1 transcoding, and for this purpose the Envoy proxy is used.
 
@@ -47,7 +48,7 @@ git clone https://github.com/googleapis/googleapis
 export GOOGLEAPIS_DIR=<your-local-googleapis-folder>
 ```
 
-4. Clone, build, and run the backend Fibonacci server:
+4. Clone, build, and run the backend Fibonacci server and client. At this point the client can be used to connect to the server without the REST API:
 
 ```bash
 git clone https://github.com/sshudler/fib-service.git
@@ -56,6 +57,7 @@ mkdir _BUILD ; cd _BUILD
 cmake ..
 make -j
 ./fib_server
+# This directory also contains the ./fib_client executable
 ```
 
 5. Start Envoy using `envoy.yaml` configuration file:
