@@ -9,6 +9,7 @@
 #include <ctime>
 #include <vector>
 #include <unordered_map>
+#include <stdexcept>
 
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <grpcpp/grpcpp.h>
@@ -17,25 +18,47 @@
 #include "fib.grpc.pb.h"
 
 
-#define FIB_PRECOMP_RANGE       1048576     // 2^20 = 1M
+#define MAX_FIB_NUM             93      // More than 93 will not fit into uint64
+#define FIB_PRECOMP_RANGE       80      // Precompute the Fibonacci values so that we get smaller latency.
+                                        // This value is smaller than MAX_FIB_NUM to test both the precomputation
+                                        // code and the calculation based on precomputed values
+
 
 
 class FibServiceImpl final : public fib::FibService::Service {
 public:
-    FibServiceImpl() : _fibNumbers(FIB_PRECOMP_RANGE) {
+    FibServiceImpl() : _fibNumbers(FIB_PRECOMP_RANGE + 1) {
+
+        // Precompute the Fibonacci sequence
         _fibNumbers[0] = 0;
         _fibNumbers[1] = 1;
         _fibNumbers[2] = 1;
 
-        for(uint32_t i = 3; i < FIB_PRECOMP_RANGE; ++i)
+        for(uint32_t i = 3; i <= FIB_PRECOMP_RANGE; ++i)
             _fibNumbers[i] = _fibNumbers[i - 2] + _fibNumbers[i - 1];
     }
 
     grpc::Status ComputeFib(grpc::ServerContext* ctx, const fib::FibRequest* req, fib::FibResponse* rep) override {
 
-        std::cout << "Responding to request -- n = " << req->n() << std::endl;
+        int32_t requested_fib = 0;
+        
+        // Requested Fibonacci number should be in range [0,93] so that the result fits into uint64
+        try {
+            requested_fib = stoi(req->n());
+        }
+        catch(const std::out_of_range& oor) {
+            return grpc::Status(grpc::StatusCode::OUT_OF_RANGE, "Requested Fibonacci number is out of range [0, 93]");
+        }
+        catch(const std::invalid_argument& ie) {
+            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Requested Fibonacci number cannot be parsed");
+        }
+        
+        if(requested_fib < 0 || requested_fib > MAX_FIB_NUM)
+            return grpc::Status(grpc::StatusCode::OUT_OF_RANGE, "Requested Fibonacci number is out of range [0, 93]");
 
-        uint32_t requested_fib = req->n();
+
+        std::cout << "Responding to request :: n = " << requested_fib << std::endl;
+        
         rep->set_fib(CalcFibHelper(requested_fib));
         rep->set_count(++_counts[requested_fib]);
         rep->set_timestamp((uint32_t)time(nullptr));
@@ -44,24 +67,26 @@ public:
     }
 
 private:
-    uint32_t CalcFibHelper(uint32_t n) {
+    uint64_t CalcFibHelper(int32_t n) {
 
-        if(n < FIB_PRECOMP_RANGE)
+        // If MAX_FIB_NUM <= FIB_PRECOMP_RANGE we already have precomputed the result, however,
+        // the rest of the function below is for cases when we decide that FIB_PRECOMP_RANGE < MAX_FIB_NUM
+        if(n <= FIB_PRECOMP_RANGE)
             return _fibNumbers[n];
         
-        uint32_t i = FIB_PRECOMP_RANGE;
-        uint32_t f2 = _fibNumbers[FIB_PRECOMP_RANGE - 2];
-        uint32_t f1 = _fibNumbers[FIB_PRECOMP_RANGE - 1];
-        for( ; i < n - 1; ++i) {
-            uint32_t tmp = f2;
+        int32_t i = FIB_PRECOMP_RANGE;
+        uint64_t f1 = _fibNumbers[FIB_PRECOMP_RANGE - 1];
+        uint64_t f2 = _fibNumbers[FIB_PRECOMP_RANGE];
+        for( ; i < n; ++i) {
+            uint64_t tmp = f2;
             f2 = f1 + f2;
-            f1 = f2;
+            f1 = tmp;
         }
         return f2;
     }
 
-    std::vector<uint32_t> _fibNumbers;
-    std::unordered_map<uint32_t, uint32_t> _counts;
+    std::vector<uint64_t> _fibNumbers;
+    std::unordered_map<int32_t, uint32_t> _counts;
 };
 
 

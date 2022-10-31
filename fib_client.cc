@@ -14,10 +14,10 @@ public:
 
     // Assembles the client's payload, sends it and presents the response back
     // from the server
-    bool ComputeFib(uint32_t n, uint32_t& fib, uint32_t& ts, uint32_t& count) {
+    bool ComputeFib(int32_t n, uint64_t& fib, uint32_t& ts, uint32_t& count) {
 
         fib::FibRequest req;
-        req.set_n(n);
+        req.set_n(std::to_string(n));
 
         // Container for the data we expect from the server
         fib::FibResponse rep;
@@ -61,11 +61,12 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    uint32_t n = std::stoi(argv[1]);
+    int32_t n = std::stoi(argv[1]);
 
     FibClient fib_service(grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
 
-    uint32_t f, ts, cnt;
+    uint32_t ts, cnt;
+    uint64_t f;
     if(!fib_service.ComputeFib(n, f, ts, cnt)) {
         std::cout << "Request failed" << std::endl;
         return -2;
